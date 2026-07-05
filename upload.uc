@@ -84,7 +84,10 @@ function attempt(cfg, uuid, done) {
 	let boundary = `ucrashreport-${uuid}`;
 	let body = build_body(uuid, boundary);
 
+	warn(`ucrashreportd: uploading ${uuid} to ${cfg.server}\n`);
+
 	if (body == null) {
+		warn(`ucrashreportd: spool entry ${uuid} is unreadable, dropping\n`);
 		spool.set_state(uuid, 'failed');
 		return done(true);
 	}
@@ -137,6 +140,7 @@ function attempt(cfg, uuid, done) {
 	});
 
 	if (!uc) {
+		warn(`ucrashreportd: uclient.new() failed for ${cfg.server}\n`);
 		spool.set_state(uuid, 'queued');
 		return done(false);
 	}
