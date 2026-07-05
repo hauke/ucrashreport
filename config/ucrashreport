@@ -1,0 +1,18 @@
+config settings 'settings'
+	# master switch — crash reporting is strictly opt-in
+	option enabled '0'
+	option server 'https://crash.openwrt.org'
+	# capture live kernel oopses from /dev/kmsg
+	option oops '1'
+	# collect pstore (ramoops) records after a crash reboot
+	option pstore '1'
+	# also report kernel WARNING splats (noisy, off by default)
+	option warnings '0'
+	# hold reports for manual approval instead of uploading directly
+	option review '0'
+	# submit without a device key; reports cannot be viewed later
+	option anonymous '0'
+	option max_reports_per_day '5'
+	# debugging only: keep spool entries and pstore records instead of
+	# deleting them
+	option keep_files '0'
