@@ -37,6 +37,7 @@ function load_config() {
 let cfg = load_config();
 let retry_ms = RETRY_MIN_MS;
 let retry_timer;
+let uploading = false;
 
 if (!cfg.enabled || !cfg.server)
 	exit(0);
@@ -47,17 +48,25 @@ function kick_uploader() {
 }
 
 function upload_tick() {
+	if (uploading)
+		return;
+	uploading = true;
+
 	// exceptions must never escape into the event loop — they would
 	// kill the daemon
 	try {
-		if (upload.run_queue(cfg) > 0) {
-			// entries left — retry with backoff
-			retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
-			retry_timer.set(retry_ms);
-		} else {
-			retry_ms = RETRY_MIN_MS;
-		}
+		upload.run_queue(cfg, (pending) => {
+			uploading = false;
+			if (pending > 0) {
+				// entries left — retry with backoff
+				retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
+				retry_timer.set(retry_ms);
+			} else {
+				retry_ms = RETRY_MIN_MS;
+			}
+		});
 	} catch (e) {
+		uploading = false;
 		warn(`ucrashreportd: upload failed: ${e}\n`);
 		retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
 		retry_timer.set(retry_ms);

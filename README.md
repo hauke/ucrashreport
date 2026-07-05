@@ -38,8 +38,8 @@ developers.
 | `upload.uc` | multipart upload + challenge-response login |
 | `ucrashreport.uc` | CLI |
 
-Runtime dependencies: ucode (fs, uloop, ubus, uci modules),
-uclient-fetch, usign, gzip. No C code.
+Runtime dependencies: ucode (fs, uloop, ubus, uci, struct and uclient
+modules), uclient-fetch (login flow only), usign, gzip. No C code.
 
 The wire protocol is specified in the server repository:
 `docs/protocol.md`.
