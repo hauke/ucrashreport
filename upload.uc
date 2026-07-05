@@ -20,7 +20,9 @@ function http_post(url, body_path, headers) {
 	for (let h in headers)
 		cmd += ` --header '${h}'`;
 
-	cmd += ` --post-file='${body_path}' '${url}' 2>/dev/null`;
+	// stderr goes to the daemon's stderr, which procd forwards to the
+	// syslog — silent upload failures are undebuggable in the field
+	cmd += ` --post-file='${body_path}' '${url}'`;
 
 	let p = popen(cmd);
 	if (!p)
