@@ -3,6 +3,7 @@
 'use strict';
 
 import { readfile, popen } from 'fs';
+import { unpack } from 'struct';
 
 // Parse /etc/os-release style KEY="value" content. Pure function for
 // unit testing.
@@ -26,6 +27,40 @@ export function parse_apk_kernel(content) {
 		let m = match(line, /^kernel-([^ ]+) /);
 		if (m)
 			return m[1];
+	}
+
+	return null;
+};
+
+// Extract the GNU build-id from an ELF note blob such as
+// /sys/kernel/notes. Note format: namesz/descsz/type (3x u32 native
+// endian), name (padded to 4), desc (padded to 4). Pure function for
+// unit testing; returns lowercase hex or null.
+export function parse_kernel_notes(data) {
+	if (!data)
+		return null;
+
+	let len = length(data);
+	let off = 0;
+
+	while (off + 12 <= len) {
+		let hdr = unpack('3I', substr(data, off, 12));
+		let namesz = hdr[0], descsz = hdr[1], type = hdr[2];
+
+		if (namesz > 256 || descsz > 4096)
+			return null;
+
+		let name = rtrim(substr(data, off + 12, namesz), '\0');
+		let desc_off = off + 12 + ((namesz + 3) & ~3);
+
+		if (desc_off + descsz > len)
+			return null;
+
+		// NT_GNU_BUILD_ID == 3
+		if (name == 'GNU' && type == 3)
+			return hexenc(substr(data, desc_off, descsz));
+
+		off = desc_off + ((descsz + 3) & ~3);
 	}
 
 	return null;
@@ -59,8 +94,9 @@ function kernel_version() {
 // added by the spool when the payload is written.
 export function collect(kind, uuid) {
 	let osr = parse_os_release(readfile('/etc/os-release'));
+	let buildid = parse_kernel_notes(readfile('/sys/kernel/notes'));
 
-	return {
+	let meta = {
 		format: 1,
 		kind: kind,
 		uuid: uuid,
@@ -74,4 +110,10 @@ export function collect(kind, uuid) {
 		board: trim(readfile('/tmp/sysinfo/board_name') ?? 'unknown'),
 		kernel: kernel_version() ?? 'unknown',
 	};
+
+	// lets the server verify fetched debug symbols match this kernel
+	if (buildid)
+		meta.kernel_buildid = buildid;
+
+	return meta;
 };
