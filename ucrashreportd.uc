@@ -93,13 +93,17 @@ ubus.publish('ucrashreport', {
 				anonymous: !!cfg.anonymous,
 				review: !!cfg.review,
 				spool: length(spool.list()),
+				uploaded: length(spool.history()),
 			};
 		},
 	},
 	list: {
 		args: {},
 		call: function() {
-			return { reports: spool.list() };
+			return {
+				reports: spool.list(),
+				uploaded: spool.history(),
+			};
 		},
 	},
 	show: {

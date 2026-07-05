@@ -81,8 +81,22 @@ function attempt(cfg, uuid) {
 	unlink(body_path);
 
 	if (res?.ok && res.body?.report_id) {
-		spool.set_result(uuid, res.body);
-		spool.set_state(uuid, 'uploaded');
+		spool.history_add({
+			uploaded_at: time(),
+			kind: spool.get_meta(uuid)?.kind,
+			uuid: uuid,
+			report_id: res.body.report_id,
+			view_url: res.body.view_url,
+		});
+
+		if (cfg.keep_files) {
+			spool.set_result(uuid, res.body);
+			spool.set_state(uuid, 'uploaded');
+		} else {
+			// the persistent history is the record; drop the spool
+			// entry so /tmp stays clean
+			spool.remove(uuid);
+		}
 		return true;
 	}
 

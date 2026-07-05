@@ -14,8 +14,14 @@ const SPOOL_DIR = BASE_DIR + '/spool';
 const SEEN_FILE = BASE_DIR + '/seen';
 const QUOTA_FILE = BASE_DIR + '/quota';
 
+// history of successfully uploaded reports; persistent (and kept
+// across sysupgrade) because the spool in /tmp dies with the reboot
+// that a crash typically causes
+const HISTORY_FILE = '/etc/ucrashreport/uploads.log';
+
 const MAX_ENTRIES = 16;
 const MAX_SEEN = 50;
+const MAX_HISTORY = 50;
 
 let config = {};
 
@@ -192,4 +198,34 @@ export function discard(uuid) {
 
 export function set_result(uuid, result) {
 	writefile(`${SPOOL_DIR}/${uuid}/result.json`, sprintf('%J', result));
+};
+
+// One JSON object per line, newest last, capped at MAX_HISTORY.
+export function history_add(entry) {
+	mkdir('/etc/ucrashreport', 0o700);
+
+	let lines = filter(split(readfile(HISTORY_FILE) ?? '', '\n'),
+	                   l => length(l));
+
+	push(lines, sprintf('%J', entry));
+	while (length(lines) > MAX_HISTORY)
+		shift(lines);
+
+	writefile(HISTORY_FILE, join('\n', lines) + '\n');
+};
+
+export function history() {
+	let res = [];
+
+	for (let line in split(readfile(HISTORY_FILE) ?? '', '\n')) {
+		if (!length(line))
+			continue;
+		try {
+			push(res, json(line));
+		} catch (e) {
+			// skip corrupt lines
+		}
+	}
+
+	return res;
 };
