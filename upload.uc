@@ -15,7 +15,9 @@ const MAX_ATTEMPTS = 8;
 const CRLF = '\r\n';
 
 function http_post(url, body_path, headers) {
-	let cmd = 'uclient-fetch -q -O - --timeout=30';
+	// no -q: it would suppress uclient-fetch's error messages, and
+	// those are the only place the HTTP status code is visible
+	let cmd = 'uclient-fetch -O - --timeout=30';
 
 	for (let h in headers)
 		cmd += ` --header '${h}'`;
@@ -31,7 +33,17 @@ function http_post(url, body_path, headers) {
 	let body = p.read('all');
 	let rc = p.close();
 
-	return { ok: rc == 0, body: json(body ?? 'null') };
+	// empty or non-JSON output (failed request) must not throw —
+	// an exception here would take down the daemon's event loop
+	let parsed = null;
+	try {
+		if (length(body))
+			parsed = json(body);
+	} catch (e) {
+		warn(`ucrashreportd: unparseable server response\n`);
+	}
+
+	return { ok: rc == 0, body: parsed };
 }
 
 function build_body(uuid, boundary, path) {
@@ -81,6 +93,8 @@ function attempt(cfg, uuid) {
 	unlink(body_path);
 
 	if (res?.ok && res.body?.report_id) {
+		warn(`ucrashreportd: uploaded ${uuid} as ${res.body.report_id}` +
+		     `${res.body.view_url ? `, ${res.body.view_url}` : ''}\n`);
 		spool.history_add({
 			uploaded_at: time(),
 			kind: spool.get_meta(uuid)?.kind,
@@ -100,6 +114,8 @@ function attempt(cfg, uuid) {
 		return true;
 	}
 
+	warn(`ucrashreportd: upload of ${uuid} to ${cfg.server} failed` +
+	     `${res ? ` (rc=${res.ok}, body=${res.body != null})` : ''}, will retry\n`);
 	spool.set_state(uuid, 'queued');
 	return false;
 }

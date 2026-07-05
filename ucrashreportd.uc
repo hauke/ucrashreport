@@ -47,12 +47,20 @@ function kick_uploader() {
 }
 
 function upload_tick() {
-	if (upload.run_queue(cfg) > 0) {
-		// entries left — retry with backoff
+	// exceptions must never escape into the event loop — they would
+	// kill the daemon
+	try {
+		if (upload.run_queue(cfg) > 0) {
+			// entries left — retry with backoff
+			retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
+			retry_timer.set(retry_ms);
+		} else {
+			retry_ms = RETRY_MIN_MS;
+		}
+	} catch (e) {
+		warn(`ucrashreportd: upload failed: ${e}\n`);
 		retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
 		retry_timer.set(retry_ms);
-	} else {
-		retry_ms = RETRY_MIN_MS;
 	}
 }
 
@@ -166,5 +174,8 @@ ubus.listener('network.interface', (type, msg) => {
 
 // anything already queued (pstore) — try right away
 kick_uploader();
+
+warn(`ucrashreportd: started, server ${cfg.server}, ` +
+     `${length(spool.list())} report(s) spooled\n`);
 
 uloop.run();
