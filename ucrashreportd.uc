@@ -42,9 +42,17 @@ let uploading = false;
 if (!cfg.enabled || !cfg.server)
 	exit(0);
 
+// NOTE: never call .cancel() on the retry timer — a cancelled ucode
+// uloop timer is dead for good, .set() will not re-arm it. The timer
+// is created once at init (armed far in the future) and only ever
+// re-armed with .set().
+function schedule_upload(ms) {
+	retry_timer.set(ms);
+}
+
 function kick_uploader() {
 	retry_ms = RETRY_MIN_MS;
-	retry_timer.set(1);
+	schedule_upload(1);
 }
 
 function upload_tick() {
@@ -60,7 +68,7 @@ function upload_tick() {
 			if (pending > 0) {
 				// entries left — retry with backoff
 				retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
-				retry_timer.set(retry_ms);
+				schedule_upload(retry_ms);
 			} else {
 				retry_ms = RETRY_MIN_MS;
 			}
@@ -69,7 +77,7 @@ function upload_tick() {
 		uploading = false;
 		warn(`ucrashreportd: upload failed: ${e}\n`);
 		retry_ms = min(retry_ms * 2, RETRY_MAX_MS);
-		retry_timer.set(retry_ms);
+		schedule_upload(retry_ms);
 	}
 }
 
@@ -89,8 +97,8 @@ spool.init(cfg);
 if (!cfg.anonymous)
 	keys.ensure();
 
-retry_timer = uloop.timer(1, upload_tick);
-retry_timer.cancel();
+// created armed far in the future; doubles as a periodic safety tick
+retry_timer = uloop.timer(RETRY_MAX_MS, upload_tick);
 
 if (cfg.pstore)
 	pstore.collect(cfg, submit);
